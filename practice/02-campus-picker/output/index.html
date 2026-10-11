@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>課間活動挑選器 · Break Activity Picker</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#17324d;background:#f3f7fb;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;padding:24px;line-height:1.5}.app{max-width:760px;margin:0 auto;background:#fff;border:1px solid #d8e3ee;border-radius:18px;padding:24px;box-shadow:0 8px 26px #17324d12}header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}h1{font-size:clamp(1.55rem,4vw,2.2rem);line-height:1.2;margin:0 0 8px}h2{font-size:1.2rem;margin:26px 0 10px}.label{color:#526b80;margin:0 0 20px}.lang,button,select{font:inherit}button,select{border:1px solid #9eb2c6;border-radius:10px;background:white;color:#17324d;padding:10px 12px;min-height:42px}.lang{white-space:nowrap}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.field label{display:block;font-weight:650;margin-bottom:6px}.field select{width:100%}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.primary{background:#135c9c;color:#fff;border-color:#135c9c;font-weight:700}.result,.empty{min-height:80px;padding:16px;border-radius:12px;background:#edf5fc;border:1px solid #cfe0ef}.result h3{margin:0 0 8px}.details{display:flex;flex-wrap:wrap;gap:8px}.chip{background:#fff;border:1px solid #c7d8e7;border-radius:999px;padding:3px 10px}.empty{color:#8d2c2c;background:#fff3f1;border-color:#f1c7c0}ol{padding-left:24px}.history-item{margin:8px 0;padding:10px 12px;border-radius:10px;background:#f6f8fa}.note{font-size:.9rem;color:#526b80;margin:22px 0 0}.empty-history{color:#526b80}button:focus-visible,select:focus-visible{outline:3px solid #e6a700;outline-offset:2px}
+@media(max-width:600px){body{padding:12px}.app{padding:18px;border-radius:14px}.filters{grid-template-columns:1fr;gap:10px}header{align-items:center}.actions>*{flex:1 1 140px}}
+</style>
+</head>
+<body>
+<main class="app">
+<header><div><h1 id="title"></h1><p class="label" id="label"></p></div><button class="lang" id="language" type="button"></button></header>
+<section class="filters" aria-label="Filters">
+  <div class="field"><label for="location" id="location-label"></label><select id="location"></select></div>
+  <div class="field"><label for="time" id="time-label"></label><select id="time"></select></div>
+  <div class="field"><label for="energy" id="energy-label"></label><select id="energy"></select></div>
+</section>
+<div class="actions"><button class="primary" id="pick" type="button"></button><button id="reset" type="button"></button></div>
+<section aria-live="polite" aria-atomic="true" id="result" class="empty"></section>
+<section><h2 id="history-title"></h2><button id="clear" type="button"></button><ol id="history"></ol></section>
+<p class="note" id="footer"></p>
+</main>
+<script>
+'use strict';
+const activities=[
+{id:'A01',name_zh:'整理書包',name_en:'Organize your bag',location_type:'indoor',minutes:10,energy:'low'},
+{id:'A02',name_zh:'畫一張小卡',name_en:'Draw a small card',location_type:'indoor',minutes:15,energy:'low'},
+{id:'A03',name_zh:'寫三句讀書筆記',name_en:'Write three study notes',location_type:'indoor',minutes:10,energy:'low'},
+{id:'A04',name_zh:'安靜讀兩頁書',name_en:'Read two pages quietly',location_type:'indoor',minutes:15,energy:'low'},
+{id:'A05',name_zh:'排好明日待辦',name_en:'Plan tomorrow’s tasks',location_type:'indoor',minutes:20,energy:'low'},
+{id:'A06',name_zh:'整理本機練習檔',name_en:'Organize practice files',location_type:'indoor',minutes:30,energy:'medium'},
+{id:'A07',name_zh:'在合適位置慢走',name_en:'Take a gentle walk in a suitable area',location_type:'outdoor',minutes:15,energy:'low'},
+{id:'A08',name_zh:'觀察天空並畫草圖',name_en:'Observe the sky and sketch',location_type:'outdoor',minutes:20,energy:'low'},
+{id:'A09',name_zh:'在合適位置快走',name_en:'Take a brisk walk in a suitable area',location_type:'outdoor',minutes:30,energy:'medium'},
+{id:'A10',name_zh:'規劃小組練習',name_en:'Plan a group exercise',location_type:'indoor',minutes:45,energy:'medium'},
+{id:'A11',name_zh:'記錄自然色彩',name_en:'Record colors in nature',location_type:'outdoor',minutes:45,energy:'low'},
+{id:'A12',name_zh:'構思下一次社團活動',name_en:'Brainstorm a future club activity',location_type:'indoor',minutes:60,energy:'medium'}
+];
+const words={
+zh:{title:'課間我想做什麼？',label:'課間活動挑選器',language:'English',location:'地點',time:'可用時間',energy:'精力',all:'不限',indoor:'室內',outdoor:'室外',low:'低',medium:'中',minutes:n=>`${n} 分鐘`,pick:'幫我挑一個',reset:'重設篩選',history:'最近選擇',clear:'清除紀錄',none:'No matching activities.',id:'編號',place:'地點',level:'精力',empty:'尚無選擇。',fiction:'教學模擬活動；非校方公告。'},
+en:{title:'What can I do between classes?',label:'Break activity picker',language:'中文',location:'Location',time:'Available time',energy:'Energy',all:'All',indoor:'Indoor',outdoor:'Outdoor',low:'Low',medium:'Medium',minutes:n=>`${n} minutes`,pick:'Pick an activity',reset:'Reset filters',history:'Recent picks',clear:'Clear history',none:'No matching activities.',id:'ID',place:'Location',level:'Energy',empty:'No picks yet.',fiction:'Fictional teaching activities; not an official university announcement.'}
+};
+let lang='zh',history=[],lastResult=null,failed=false;
+const $=id=>document.getElementById(id);
+function setOptions(id,items,value){const s=$(id);s.replaceChildren(...items.map(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;if(v===value)o.selected=true;return o}))}
+function render(){const w=words[lang];document.documentElement.lang=lang==='zh'?'zh-Hant':'en';$('title').textContent=w.title;$('label').textContent=w.label;$('language').textContent=w.language;$('location-label').textContent=w.location;$('time-label').textContent=w.time;$('energy-label').textContent=w.energy;$('pick').textContent=w.pick;$('reset').textContent=w.reset;$('history-title').textContent=w.history;$('clear').textContent=w.clear;$('footer').textContent=w.fiction;
+setOptions('location',[['all',w.all],['indoor',w.indoor],['outdoor',w.outdoor]],$('location').value||'all');setOptions('time',[['15',w.minutes(15)],['30',w.minutes(30)],['60',w.minutes(60)]],$('time').value||'30');setOptions('energy',[['all',w.all],['low',w.low],['medium',w.medium]],$('energy').value||'all');
+renderResult();renderHistory()}
+function describe(a){const w=words[lang];return `${a.id} · ${lang==='zh'?a.name_zh:a.name_en} · ${a.minutes} ${lang==='zh'?'分鐘':'min'} · ${w[a.location_type]} · ${w[a.energy]}`}
+function renderResult(){const box=$('result');box.className=failed?'empty':'result';box.replaceChildren();if(failed){box.textContent=words[lang].none;return}if(!lastResult){box.textContent=words[lang].empty;return}const h=document.createElement('h3');h.textContent=describe(lastResult);box.append(h)}
+function renderHistory(){const list=$('history');list.replaceChildren();if(!history.length){const li=document.createElement('li');li.className='empty-history';li.textContent=words[lang].empty;list.append(li);return}history.forEach(a=>{const li=document.createElement('li');li.className='history-item';li.textContent=describe(a);list.append(li)})}
+$('pick').addEventListener('click',()=>{const place=$('location').value,limit=Number($('time').value),energy=$('energy').value;const matches=activities.filter(a=>(place==='all'||a.location_type===place)&&a.minutes<=limit&&(energy==='all'||a.energy===energy));if(!matches.length){failed=true;lastResult=null;renderResult();return}failed=false;lastResult=matches[Math.floor(Math.random()*matches.length)];history=[lastResult,...history].slice(0,5);renderResult();renderHistory()});
+$('reset').addEventListener('click',()=>{setOptions('location',[['all',words[lang].all],['indoor',words[lang].indoor],['outdoor',words[lang].outdoor]],'all');setOptions('time',[['15',words[lang].minutes(15)],['30',words[lang].minutes(30)],['60',words[lang].minutes(60)]],'30');setOptions('energy',[['all',words[lang].all],['low',words[lang].low],['medium',words[lang].medium]],'all')});
+$('clear').addEventListener('click',()=>{history=[];renderHistory()});$('language').addEventListener('click',()=>{lang=lang==='zh'?'en':'zh';render()});render();
+</script>
+</body>
+</html>
